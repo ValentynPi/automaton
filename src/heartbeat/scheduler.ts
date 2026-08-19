@@ -96,6 +96,8 @@ export class DurableScheduler {
         this.config,
         this.legacyContext.identity.address,
         this.legacyContext.identity.chainType,
+        this.legacyContext.config.requireConwayInfrastructure !== false,
+        this.legacyContext.config.treasuryPolicy?.maxInferenceDailyCents ?? 0,
       );
 
       // Get tasks that are due

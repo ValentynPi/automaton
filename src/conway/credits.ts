@@ -12,6 +12,19 @@ import type {
 } from "../types.js";
 import { SURVIVAL_THRESHOLDS } from "../types.js";
 
+export function remainingInferenceBudgetCents(
+  dailyLimitCents: number,
+  spentTodayCents: number,
+): number {
+  if (!Number.isFinite(dailyLimitCents) || dailyLimitCents <= 0) {
+    return SURVIVAL_THRESHOLDS.high + 1;
+  }
+  const spent = Number.isFinite(spentTodayCents) && spentTodayCents > 0
+    ? spentTodayCents
+    : 0;
+  return Math.max(0, Math.floor(dailyLimitCents - spent));
+}
+
 /**
  * Check the current financial state of the automaton.
  */

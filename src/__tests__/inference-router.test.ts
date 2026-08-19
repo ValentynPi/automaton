@@ -289,7 +289,7 @@ describe("InferenceRouter", () => {
     });
 
     it("computes actualCostCents accurately from token usage", async () => {
-      // gpt-5.2 has costPer1kInput=20, costPer1kOutput=80 (hundredths of cents)
+      // gpt-5.2 has costPer1kInput=18, costPer1kOutput=140 (hundredths of cents)
       // Formula: Math.ceil((input/1000)*costPer1kInput/100 + (output/1000)*costPer1kOutput/100)
       const mockChat = async (_msgs: any[], _opts: any) => ({
         message: { content: "result", role: "assistant" },
@@ -739,6 +739,9 @@ describe("Static Model Baseline", () => {
     expect(ids).toContain("gpt-4.1-nano");
     expect(ids).toContain("gpt-5.2");
     expect(ids).toContain("gpt-5.3");
+    expect(ids).toContain("claude-sonnet-4-5");
+    expect(ids).toContain("claude-haiku-4-5");
+    expect(ids).toContain("claude-opus-4-6");
   });
 
   it("all models have positive pricing", () => {

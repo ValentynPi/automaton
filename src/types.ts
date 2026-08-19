@@ -52,6 +52,11 @@ export interface AutomatonConfig {
   openaiApiKey?: string;
   anthropicApiKey?: string;
   ollamaBaseUrl?: string;
+  /**
+   * When true or omitted, Conway API key, credits, and registration are required.
+   * Set to false to run with a BYOK model provider (OpenAI) and no Conway Cloud.
+   */
+  requireConwayInfrastructure?: boolean;
   inferenceModel: string;
   maxTokensPerTurn: number;
   heartbeatConfigPath: string;
@@ -77,9 +82,14 @@ export interface AutomatonConfig {
   chainType?: ChainType;
 }
 
+export const DEFAULT_OPENAI_MODEL = "gpt-5.2";
+export const DEFAULT_OPENAI_MINI = "gpt-5-mini";
+export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5";
+export const DEFAULT_ANTHROPIC_HAIKU = "claude-haiku-4-5";
+
 export const DEFAULT_CONFIG: Partial<AutomatonConfig> = {
   conwayApiUrl: "https://api.conway.tech",
-  inferenceModel: "gpt-5.2",
+  inferenceModel: DEFAULT_OPENAI_MODEL,
   maxTokensPerTurn: 4096,
   heartbeatConfigPath: "~/.automaton/heartbeat.yml",
   dbPath: "~/.automaton/state.db",
@@ -1245,9 +1255,9 @@ export interface ModelStrategyConfig {
 }
 
 export const DEFAULT_MODEL_STRATEGY_CONFIG: ModelStrategyConfig = {
-  inferenceModel: "gpt-5.2",
-  lowComputeModel: "gpt-5-mini",
-  criticalModel: "gpt-5-mini",
+  inferenceModel: DEFAULT_OPENAI_MODEL,
+  lowComputeModel: DEFAULT_OPENAI_MINI,
+  criticalModel: DEFAULT_OPENAI_MINI,
   maxTokensPerTurn: 4096,
   hourlyBudgetCents: 0,
   sessionBudgetCents: 0,

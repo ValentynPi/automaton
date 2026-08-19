@@ -23,11 +23,17 @@
     "automaton": "dist/index.js",
     "conway-automaton": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "constitution.md",
+    "README.md",
+    "scripts"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Conway-Research/automaton.git"
+    "url": "https://github.com/ValentynPi/automaton.git"
   },
-  "homepage": "https://conway.tech",
+  "homepage": "https://github.com/ValentynPi/automaton",
   "keywords": [
     "autonomous-agent",
     "sovereign-ai",
@@ -36,9 +42,9 @@
     "self-replicating"
   ],
   "license": "MIT",
-  "packageManager": "pnpm@10.28.1",
   "scripts": {
-    "build": "tsc && pnpm -r build",
+    "build": "tsc",
+    "prepare": "tsc",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -46,7 +52,7 @@
     "test:security": "vitest run --grep 'security|injection|policy'",
     "test:financial": "vitest run --grep 'financial|spend|treasury'",
     "test:ci": "vitest run --reporter=verbose",
-    "clean": "rm -rf dist && pnpm -r clean"
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
     "@types/better-sqlite3": "^7.6.0",

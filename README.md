@@ -22,23 +22,34 @@ The result is the first automaton.
 
 Update: development of Automaton has continued across Conway's internal RL environments for faster iteration & new capabilites. Stay tuned.
 
-## Quick Start
+## Quick Start (self-hosted, OpenAI)
 
+Needs **Node.js 20+**, **git**, and **npm**. Conway Cloud is not required.
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/ValentynPi/automaton/main/scripts/install.ps1 | iex
+automaton --run
+```
+
+**macOS / Linux:**
 ```bash
-git clone https://github.com/Conway-Research/automaton.git
+curl -fsSL https://raw.githubusercontent.com/ValentynPi/automaton/main/scripts/install.sh | bash
+automaton --run
+```
+
+Or clone and install yourself:
+```bash
+git clone https://github.com/ValentynPi/automaton.git
 cd automaton
 npm install && npm run build
-node dist/index.js --run
+npm install -g .
+automaton --run
 ```
 
-On first run, the runtime launches an interactive setup wizard — generates a wallet, provisions an API key, asks for a name, genesis prompt, and creator address, then writes all config and starts the agent loop.
+First run opens a setup wizard: OpenAI API key, model (`gpt-5.2` by default), name, genesis prompt, and your creator wallet address. Config is stored in `~/.automaton/` (`%USERPROFILE%\.automaton` on Windows).
 
-For automated sandbox provisioning:
-```bash
-curl -fsSL https://conway.tech/automaton.sh | sh
-```
-
-Note: Conway Cloud, Domains, and Inference has seen immense demand. We are working on scaling & perfomance.
+Re-run setup later with `automaton --setup`. Edit providers with `automaton --configure`.
 
 ## How It Works
 

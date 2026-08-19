@@ -1,8 +1,8 @@
 /**
- * Conway Inference Client
+ * Inference Client
  *
- * Wraps Conway's /v1/chat/completions endpoint (OpenAI-compatible).
- * The automaton pays for its own thinking through Conway credits.
+ * OpenAI-compatible chat completions. Prefers BYOK OpenAI when
+ * `openaiApiKey` is set; Anthropic/Ollama/Conway are fallbacks.
  */
 
 import type {
@@ -61,15 +61,22 @@ export function createInferenceClient(
     messages: ChatMessage[],
     opts?: InferenceOptions,
   ): Promise<InferenceResponse> => {
-    const model = opts?.model || currentModel;
+    const requestedModel = opts?.model || currentModel;
     const tools = opts?.tools;
 
-    const backend = resolveInferenceBackend(model, {
+    const backend = resolveInferenceBackend(requestedModel, {
       openaiApiKey,
       anthropicApiKey,
       ollamaBaseUrl,
       getModelProvider,
     });
+
+    // Safety net: if a non-Claude id slips through (fallback matrix entry),
+    // remap to the configured Anthropic model before calling the API.
+    const model =
+      backend === "anthropic"
+        ? resolveAnthropicModel(requestedModel, currentModel, options.defaultModel)
+        : requestedModel;
 
     // Newer models (o-series, gpt-5.x, gpt-4.1) require max_completion_tokens.
     // Ollama always uses max_tokens.
@@ -183,21 +190,40 @@ function resolveInferenceBackend(
     getModelProvider?: (modelId: string) => string | undefined;
   },
 ): InferenceBackend {
-  // Registry-based routing: most accurate, no name guessing
+  if (keys.ollamaBaseUrl && keys.getModelProvider?.(model) === "ollama") {
+    return "ollama";
+  }
+
   if (keys.getModelProvider) {
     const provider = keys.getModelProvider(model);
     if (provider === "ollama" && keys.ollamaBaseUrl) return "ollama";
     if (provider === "anthropic" && keys.anthropicApiKey) return "anthropic";
     if (provider === "openai" && keys.openaiApiKey) return "openai";
     if (provider === "conway") return "conway";
-    // provider unknown or key not configured — fall through to heuristics
   }
 
-  // Heuristic fallback (model not in registry yet)
   if (keys.anthropicApiKey && /^claude/i.test(model)) return "anthropic";
-  if (keys.openaiApiKey && /^(gpt-[3-9]|gpt-4|gpt-5|o[1-9][-\s.]|o[1-9]$|chatgpt)/i.test(model)) return "openai";
+  if (keys.openaiApiKey && /^(gpt-[3-9]|gpt-4|gpt-5|o[1-9][-\s.]|o[1-9]$|chatgpt)/i.test(model)) {
+    return "openai";
+  }
+  if (keys.openaiApiKey) return "openai";
+  if (keys.anthropicApiKey) return "anthropic";
   return "conway";
+}
 
+function isClaudeModel(model: string): boolean {
+  return /^claude/i.test(model);
+}
+
+function resolveAnthropicModel(
+  requested: string,
+  current: string,
+  configuredDefault: string,
+): string {
+  if (isClaudeModel(requested)) return requested;
+  if (isClaudeModel(current)) return current;
+  if (isClaudeModel(configuredDefault)) return configuredDefault;
+  return requested;
 }
 
 async function chatViaOpenAiCompatible(params: {

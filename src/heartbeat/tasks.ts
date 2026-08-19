@@ -18,6 +18,7 @@ import type {
 import type { HealthMonitor as ColonyHealthMonitor } from "../orchestration/health-monitor.js";
 import { sanitizeInput } from "../agent/injection-defense.js";
 import { getSurvivalTier } from "../conway/credits.js";
+import { requiresConwayInfrastructure } from "../config.js";
 import { createLogger } from "../observability/logger.js";
 import { getMetrics } from "../observability/metrics.js";
 import { AlertEngine, createDefaultAlertRules } from "../observability/alerts.js";
@@ -75,8 +76,9 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
         name: taskCtx.config.name,
         address: taskCtx.identity.address,
         creditsCents: credits,
-        fundingHint:
-          "Use credit transfer API from a creator runtime to top this wallet up.",
+        fundingHint: requiresConwayInfrastructure(taskCtx.config)
+          ? "Use credit transfer API from a creator runtime to top this wallet up."
+          : "Raise treasuryPolicy.maxInferenceDailyCents or wait until the daily inference budget resets.",
         timestamp: new Date().toISOString(),
       };
       taskCtx.db.setKV("last_distress", JSON.stringify(distressPayload));
@@ -146,6 +148,9 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
   },
 
   check_usdc_balance: async (ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
+    if (!requiresConwayInfrastructure(taskCtx.config)) {
+      return { shouldWake: false };
+    }
     // Use ctx.usdcBalance instead of calling getUsdcBalance()
     const balance = ctx.usdcBalance;
     const credits = ctx.creditBalance;
@@ -338,6 +343,9 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
 
   // === Phase 2.3: Model Registry Refresh ===
   refresh_models: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
+    if (!requiresConwayInfrastructure(taskCtx.config)) {
+      return { shouldWake: false };
+    }
     try {
       const models = await taskCtx.conway.listModels();
       if (models.length > 0) {
@@ -358,6 +366,9 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
 
   // === Phase 3.1: Child Health Check ===
   check_child_health: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
+    if (!requiresConwayInfrastructure(taskCtx.config)) {
+      return { shouldWake: false };
+    }
     try {
       const { ChildLifecycle } = await import("../replication/lifecycle.js");
       const { ChildHealthMonitor } = await import("../replication/health.js");
@@ -383,6 +394,9 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
 
   // === Phase 3.1: Prune Dead Children ===
   prune_dead_children: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
+    if (!requiresConwayInfrastructure(taskCtx.config)) {
+      return { shouldWake: false };
+    }
     try {
       const { ChildLifecycle } = await import("../replication/lifecycle.js");
       const { SandboxCleanup } = await import("../replication/cleanup.js");

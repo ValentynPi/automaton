@@ -13,8 +13,9 @@ import type {
   HeartbeatConfig,
   TickContext,
 } from "../types.js";
-import { getSurvivalTier } from "../conway/credits.js";
+import { getSurvivalTier, remainingInferenceBudgetCents } from "../conway/credits.js";
 import { getUsdcBalance } from "../conway/x402.js";
+import { inferenceGetDailyCost } from "../state/database.js";
 import { createLogger } from "../observability/logger.js";
 
 type DatabaseType = BetterSqlite3.Database;
@@ -43,19 +44,26 @@ export async function buildTickContext(
   config: HeartbeatConfig,
   walletAddress?: string,
   chainType?: string,
+  requireConwayInfrastructure = true,
+  dailyInferenceLimitCents = 0,
 ): Promise<TickContext> {
   const tickId = generateTickId();
   const startedAt = new Date();
 
-  // Fetch balances ONCE
   let creditBalance = 0;
-  try {
-    creditBalance = await conway.getCreditsBalance();
-  } catch (err: any) {
-    logger.error("Failed to fetch credit balance", err instanceof Error ? err : undefined);
+  let usdcBalance = 0;
+
+  if (!requireConwayInfrastructure) {
+    const spent = inferenceGetDailyCost(db);
+    creditBalance = remainingInferenceBudgetCents(dailyInferenceLimitCents, spent);
+  } else {
+    try {
+      creditBalance = await conway.getCreditsBalance();
+    } catch (err: any) {
+      logger.error("Failed to fetch credit balance", err instanceof Error ? err : undefined);
+    }
   }
 
-  let usdcBalance = 0;
   if (walletAddress) {
     try {
       const network = chainType === "solana" ? "solana:mainnet" : "eip155:8453";

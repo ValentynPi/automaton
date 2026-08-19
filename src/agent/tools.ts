@@ -22,6 +22,9 @@ import type {
 import type { PolicyEngine } from "./policy-engine.js";
 import { sanitizeToolResult, sanitizeInput } from "./injection-defense.js";
 import { createLogger } from "../observability/logger.js";
+import { requiresConwayInfrastructure } from "../config.js";
+import { remainingInferenceBudgetCents } from "../conway/credits.js";
+import { DEFAULT_TREASURY_POLICY } from "../types.js";
 
 const logger = createLogger("tools");
 
@@ -39,10 +42,14 @@ function confinePathToSandbox(filePath: string): string | { error: string } {
   const expanded = filePath.startsWith("~")
     ? nodePath.join(SANDBOX_HOME, filePath.slice(1))
     : filePath;
-  // Resolve to absolute (relative paths resolve against SANDBOX_HOME)
+  // Resolve to absolute (relative paths resolve against SANDBOX_HOME).
+  // Compare against the OS-resolved home so Windows maps "/root/…" → "D:\root\…".
+  const homeResolved = nodePath.resolve(SANDBOX_HOME);
   const resolved = nodePath.resolve(SANDBOX_HOME, expanded);
-  // Ensure the resolved path is within the sandbox home
-  if (resolved !== SANDBOX_HOME && !resolved.startsWith(SANDBOX_HOME + "/")) {
+  const prefix = homeResolved.endsWith(nodePath.sep)
+    ? homeResolved
+    : homeResolved + nodePath.sep;
+  if (resolved !== homeResolved && !resolved.startsWith(prefix)) {
     return {
       error: `Blocked: write_file path "${filePath}" resolves to "${resolved}" which is outside the allowed directory (${SANDBOX_HOME}). Writes are confined to the sandbox home.`,
     };
@@ -108,8 +115,37 @@ function isForbiddenCommand(command: string, sandboxId: string): string | null {
 
 // ─── Built-in Tools ────────────────────────────────────────────
 
-export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
-  return [
+const CONWAY_CLOUD_ONLY_TOOLS = new Set([
+  "create_sandbox",
+  "delete_sandbox",
+  "list_sandboxes",
+  "topup_credits",
+  "transfer_credits",
+  "search_domains",
+  "register_domain",
+  "manage_dns",
+  "spawn_child",
+  "fund_child",
+  "start_child",
+  "check_child_status",
+  "verify_child_constitution",
+  "prune_dead_children",
+  "message_child",
+]);
+
+export interface BuiltinToolOptions {
+  includeConwayCloud?: boolean;
+  includeSocial?: boolean;
+}
+
+export function createBuiltinTools(
+  sandboxId: string,
+  options: BuiltinToolOptions = {},
+): AutomatonTool[] {
+  const includeConwayCloud = options.includeConwayCloud !== false;
+  const includeSocial = options.includeSocial !== false;
+
+  const tools: AutomatonTool[] = [
     // ── VM/Sandbox Tools ──
     {
       name: "exec",
@@ -249,11 +285,19 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
     // ── Conway API Tools ──
     {
       name: "check_credits",
-      description: "Check your current Conway compute credit balance.",
+      description: "Check remaining inference budget (self-hosted) or Conway compute credit balance.",
       category: "conway",
       riskLevel: "safe",
       parameters: { type: "object", properties: {} },
       execute: async (_args, ctx) => {
+        if (!requiresConwayInfrastructure(ctx.config)) {
+          const { inferenceGetDailyCost } = await import("../state/database.js");
+          const spent = inferenceGetDailyCost(ctx.db.raw);
+          const limit = ctx.config.treasuryPolicy?.maxInferenceDailyCents
+            ?? DEFAULT_TREASURY_POLICY.maxInferenceDailyCents;
+          const remaining = remainingInferenceBudgetCents(limit, spent);
+          return `Inference budget remaining today: $${(remaining / 100).toFixed(2)} (spent $${(spent / 100).toFixed(2)} of $${(limit / 100).toFixed(2)} daily limit)`;
+        }
         const balance = await ctx.conway.getCreditsBalance();
         return `Credit balance: $${(balance / 100).toFixed(2)} (${balance} cents)`;
       },
@@ -1416,7 +1460,7 @@ Model: ${ctx.inference.getDefaultModel()}
         // Solana guard: ERC-8004 is EVM-only
         const chainType = ctx.config.chainType || ctx.identity.chainType || "evm";
         if (chainType === "solana") {
-          return "ERC-8004 is an EVM-only standard. Your Solana identity is registered via Conway API instead.";
+          return "ERC-8004 is an EVM-only standard. Solana wallets cannot register on-chain via ERC-8004.";
         }
 
         // Check if already registered in local database
@@ -3209,6 +3253,12 @@ Model: ${ctx.inference.getDefaultModel()}
       },
     },
   ];
+
+  return tools.filter((tool) => {
+    if (!includeConwayCloud && CONWAY_CLOUD_ONLY_TOOLS.has(tool.name)) return false;
+    if (!includeSocial && tool.name === "send_message") return false;
+    return true;
+  });
 }
 
 /**

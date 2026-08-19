@@ -7,7 +7,7 @@
 import fs from "fs";
 import path from "path";
 import type { AutomatonConfig, TreasuryPolicy, ModelStrategyConfig, SoulConfig } from "./types.js";
-import { DEFAULT_CONFIG, DEFAULT_TREASURY_POLICY, DEFAULT_MODEL_STRATEGY_CONFIG, DEFAULT_SOUL_CONFIG } from "./types.js";
+import { DEFAULT_CONFIG, DEFAULT_TREASURY_POLICY, DEFAULT_MODEL_STRATEGY_CONFIG, DEFAULT_SOUL_CONFIG, DEFAULT_OPENAI_MINI } from "./types.js";
 import { getAutomatonDir } from "./identity/wallet.js";
 import { loadApiKeyFromConfig } from "./identity/provision.js";
 import { createLogger } from "./observability/logger.js";
@@ -61,7 +61,7 @@ export function loadConfig(): AutomatonConfig | null {
       ...(raw.soulConfig ?? {}),
     };
 
-    return {
+    const merged = {
       ...DEFAULT_CONFIG,
       ...raw,
       sandboxId:
@@ -74,6 +74,17 @@ export function loadConfig(): AutomatonConfig | null {
       soulConfig,
       chainType: raw.chainType || "evm",
     } as AutomatonConfig;
+
+    // Self-hosted wizard writes socialRelayUrl: "". If an older config only
+    // flips requireConwayInfrastructure, do not re-inject Conway's default relay.
+    if (
+      merged.requireConwayInfrastructure === false &&
+      (raw.socialRelayUrl === undefined || raw.socialRelayUrl === "https://social.conway.tech")
+    ) {
+      merged.socialRelayUrl = "";
+    }
+
+    return merged;
   } catch {
     return null;
   }
@@ -106,9 +117,21 @@ export function saveConfig(config: AutomatonConfig): void {
  */
 export function resolvePath(p: string): string {
   if (p.startsWith("~")) {
-    return path.join(process.env.HOME || "/root", p.slice(1));
+    return path.join(homeDir(), p.slice(1));
   }
   return p;
+}
+
+function homeDir(): string {
+  return process.env.HOME || process.env.USERPROFILE || "/root";
+}
+
+/**
+ * Conway Cloud checks run unless explicitly disabled.
+ * Set `requireConwayInfrastructure: false` in automaton.json to self-host.
+ */
+export function requiresConwayInfrastructure(config: AutomatonConfig): boolean {
+  return config.requireConwayInfrastructure !== false;
 }
 
 /**
@@ -126,11 +149,15 @@ export function createConfig(params: {
   openaiApiKey?: string;
   anthropicApiKey?: string;
   ollamaBaseUrl?: string;
+  inferenceModel?: string;
+  requireConwayInfrastructure?: boolean;
   parentAddress?: string;
   treasuryPolicy?: TreasuryPolicy;
   chainType?: ChainType;
 }): AutomatonConfig {
   const normalizedSandboxId = (params.sandboxId || "").trim();
+  const inferenceModel =
+    params.inferenceModel || DEFAULT_CONFIG.inferenceModel || "gpt-5.2";
   return {
     name: params.name,
     genesisPrompt: params.genesisPrompt,
@@ -144,7 +171,8 @@ export function createConfig(params: {
     openaiApiKey: params.openaiApiKey,
     anthropicApiKey: params.anthropicApiKey,
     ollamaBaseUrl: params.ollamaBaseUrl,
-    inferenceModel: DEFAULT_CONFIG.inferenceModel || "gpt-5.2",
+    requireConwayInfrastructure: params.requireConwayInfrastructure,
+    inferenceModel,
     maxTokensPerTurn: DEFAULT_CONFIG.maxTokensPerTurn || 4096,
     heartbeatConfigPath:
       DEFAULT_CONFIG.heartbeatConfigPath || "~/.automaton/heartbeat.yml",
@@ -156,6 +184,17 @@ export function createConfig(params: {
     maxChildren: DEFAULT_CONFIG.maxChildren || 3,
     parentAddress: params.parentAddress,
     treasuryPolicy: params.treasuryPolicy ?? DEFAULT_TREASURY_POLICY,
+    modelStrategy: {
+      ...DEFAULT_MODEL_STRATEGY_CONFIG,
+      inferenceModel,
+      ...(params.requireConwayInfrastructure === false
+        ? {
+            lowComputeModel: DEFAULT_OPENAI_MINI,
+            criticalModel: DEFAULT_OPENAI_MINI,
+          }
+        : {}),
+    },
     chainType: params.chainType || "evm",
+    ...(params.requireConwayInfrastructure === false ? { socialRelayUrl: "" } : {}),
   };
 }

@@ -185,8 +185,9 @@ export class InferenceRouter {
    * Select the best model for a given tier and task type.
    *
    * Priority:
-   *   1. First routing-matrix candidate present in the registry
-   *   2. User-configured model(s) from ModelStrategyConfig
+   *   1. User-configured inferenceModel on high/normal (when enabled in registry)
+   *   2. First routing-matrix candidate present in the registry
+   *   3. User-configured model(s) from ModelStrategyConfig
    *      (free/Ollama models are allowed at any tier, including dead)
    */
   selectModel(tier: SurvivalTier, taskType: InferenceTaskType): ModelEntry | null {
@@ -196,9 +197,19 @@ export class InferenceRouter {
 
     const tierRank = TIER_ORDER[tier] ?? 0;
 
-    // 1. Try routing-matrix candidates
     const preference = this.getPreference(tier, taskType);
-    if (preference && preference.candidates.length > 0) {
+    if ((tier === "high" || tier === "normal") && this.budget.config.inferenceModel) {
+      const configured = this.registry.get(this.budget.config.inferenceModel);
+      if (configured?.enabled) {
+        return configured;
+      }
+    }
+
+    if (preference) {
+      // Empty candidate list = task disabled at this tier (do not fall through).
+      if (preference.candidates.length === 0) {
+        return null;
+      }
       for (const candidateId of preference.candidates) {
         const entry = this.registry.get(candidateId);
         if (entry && entry.enabled) {
@@ -207,8 +218,7 @@ export class InferenceRouter {
       }
     }
 
-    // 2. Fall back to user-configured models.
-    //    This handles local/Ollama setups where routing-matrix models are absent.
+    // Fall back to user-configured models (local/Ollama when matrix models are absent).
     const strategy = this.budget.config;
     const fallbackIds: (string | undefined)[] =
       tier === "critical" || tier === "dead"
