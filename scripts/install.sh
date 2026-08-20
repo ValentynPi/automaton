@@ -24,16 +24,18 @@ if [ "$NODE_MAJOR" -lt 20 ]; then
 fi
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-  echo "Updating existing install at $INSTALL_DIR"
+  echo "Updating install at $INSTALL_DIR from $REPO_URL"
+  git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
   git -C "$INSTALL_DIR" fetch origin
   git -C "$INSTALL_DIR" checkout "$BRANCH"
-  git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH"
+  git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH"
 else
   echo "Cloning $REPO_URL → $INSTALL_DIR"
   git clone --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
 fi
 
 cd "$INSTALL_DIR"
+echo "Using repo: $(git remote get-url origin)"
 npm install
 npx tsc
 npm install -g .
@@ -43,4 +45,5 @@ echo "Installed. Run:"
 echo "  automaton --run"
 echo
 echo "First run opens the setup wizard (OpenAI key + name + genesis prompt)."
+echo "Do NOT run automaton --provision (that is Conway Cloud only)."
 echo "Config is stored in ~/.automaton/"

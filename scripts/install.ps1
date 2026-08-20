@@ -26,16 +26,18 @@ if ($nodeMajor -lt 20) {
 
 $gitDir = Join-Path $InstallDir ".git"
 if (Test-Path $gitDir) {
-  Write-Host "Updating existing install at $InstallDir"
+  Write-Host "Updating install at $InstallDir from $RepoUrl"
+  git -C $InstallDir remote set-url origin $RepoUrl
   git -C $InstallDir fetch origin
   git -C $InstallDir checkout $Branch
-  git -C $InstallDir pull --ff-only origin $Branch
+  git -C $InstallDir reset --hard "origin/$Branch"
 } else {
   Write-Host "Cloning $RepoUrl -> $InstallDir"
   git clone --branch $Branch $RepoUrl $InstallDir
 }
 
 Set-Location $InstallDir
+Write-Host "Using repo: $(git remote get-url origin)"
 npm install
 npx tsc
 npm install -g .
@@ -45,4 +47,5 @@ Write-Host "Installed. Run:"
 Write-Host "  automaton --run"
 Write-Host ""
 Write-Host "First run opens the setup wizard (OpenAI key + name + genesis prompt)."
+Write-Host "Do NOT run automaton --provision (that is Conway Cloud only)."
 Write-Host "Config is stored in $env:USERPROFILE\.automaton\"
