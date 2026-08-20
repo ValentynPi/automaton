@@ -38,11 +38,30 @@ cd "$INSTALL_DIR"
 echo "Using repo: $(git remote get-url origin)"
 npm install
 npx tsc
+chmod +x dist/index.js
 npm install -g .
+
+# Some npm prefixes leave the global shim non-executable (common with ~/.npm-global).
+for candidate in \
+  "$(npm prefix -g 2>/dev/null)/bin/automaton" \
+  "$HOME/.npm-global/bin/automaton" \
+  "/usr/local/bin/automaton"; do
+  if [ -e "$candidate" ]; then
+    chmod +x "$candidate" || true
+    if [ -L "$candidate" ]; then
+      target="$(readlink -f "$candidate" 2>/dev/null || true)"
+      [ -n "$target" ] && chmod +x "$target" || true
+    fi
+  fi
+done
 
 echo
 echo "Installed. Run:"
 echo "  automaton --run"
+echo
+echo "If you see Permission denied, run:"
+echo "  chmod +x \"\$(npm prefix -g)/bin/automaton\" ~/automaton/dist/index.js"
+echo "  # or: node ~/automaton/dist/index.js --run"
 echo
 echo "First run opens the setup wizard (OpenAI key + name + genesis prompt)."
 echo "Do NOT run automaton --provision (that is Conway Cloud only)."
